@@ -128,6 +128,8 @@ The API will be available at:
 
 ```text
 http://127.0.0.1:8000/
+
+https://e-commerce-backend-api-1slf.onrender.com/
 ```
 
 ## API Endpoints
