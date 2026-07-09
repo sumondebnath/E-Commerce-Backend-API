@@ -21,11 +21,19 @@ class AddressSerializer(serializers.ModelSerializer):
 
 class UserSerializer(serializers.ModelSerializer):
     full_name = serializers.ReadOnlyField()
+    roles = serializers.SerializerMethodField()
 
     class Meta:
         model = User
-        fields = ["id", "email", "first_name", "last_name", "full_name", "is_active", "addresses", "created_at"]
+        fields = ["id", "email", "first_name", "last_name", "full_name", "roles", "is_active", "addresses", "created_at"]
         read_only_fields = ["id", "is_active", "created_at"]
+
+    def get_roles(self, obj):
+        if obj.is_superuser:
+            return ["admin"]
+        if obj.is_staff:
+            return ["staff"]
+        return ["user"]
 
 
 class RegisterSerializer(serializers.ModelSerializer):

@@ -42,13 +42,13 @@ class OrderViewSet(viewsets.ReadOnlyModelViewSet):
     def cancel(self, request, pk=None):
         order = self.get_object()
         # BUSINESS LOGIC: can only cancel before it ships
-        if order.order_status not in ('Pending', 'Processing'):
+        if order.order_status not in ('PENDING', 'PROCESSING'):
             return Response(
                 {"detail": f"Cannot cancel an order that is already '{order.order_status}'."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
         with transaction.atomic():
-            order.order_status = 'Cancelled'
+            order.order_status = 'CANCELLED'
             order.save()
             # restock items
             for item in order.items.select_related('product'):
@@ -136,10 +136,10 @@ class CheckoutView(APIView):
 
         order = Order.objects.create(
             user=request.user,
-            subtotal_amount=subtotal,
+            subtotal_cost=subtotal,
             shipping_cost=shipping_cost,
             total_amount=total,
-            order_status='Pending',
+            order_status='PENDING',
             **shipping_fields,
         )
 
@@ -200,11 +200,11 @@ class PaymentWebhookView(APIView):
             payment.payment_status = new_status
             if new_status == 'Completed':
                 payment.paid_at = timezone.now()
-                payment.order.order_status = 'Processing'
+                payment.order.order_status = 'PROCESSING'
                 payment.order.save()
             elif new_status == 'Failed':
                 # BUSINESS LOGIC: restock items if payment fails
-                payment.order.order_status = 'Cancelled'
+                payment.order.order_status = 'CANCELLED'
                 payment.order.save()
                 for item in payment.order.items.select_related('product'):
                     if item.product:

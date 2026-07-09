@@ -68,7 +68,13 @@ class ReviewViewSet(viewsets.ModelViewSet):
     filterset_fields = ['product']
 
     def get_queryset(self):
-        return Review.objects.select_related('user', 'product').all()
+        qs = Review.objects.select_related('user', 'product').all()
+        product_id = self.request.query_params.get('product')
+        if product_id:
+            qs = qs.filter(product_id=product_id)
+        elif self.request.user.is_authenticated:
+            qs = qs.filter(user=self.request.user)
+        return qs
     
     def perform_update(self, serializer):
         if serializer.instance.user != self.request.user:

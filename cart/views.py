@@ -14,7 +14,7 @@ class CartItemViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
-        return self.CartItem.objects.filter(user=self.request.user).select_related('product')
+        return CartItem.objects.filter(user=self.request.user).select_related('product')
     
     def create(self, request, *args, **kwargs):
         product_id = request.data.get('product_id')

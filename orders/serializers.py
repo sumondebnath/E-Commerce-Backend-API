@@ -33,16 +33,23 @@ class OrderListSerializer(serializers.ModelSerializer):
 class OrderDetailSerializer(serializers.ModelSerializer):
     items = OrderItemSerializer(many=True, read_only=True)
     payment = PaymentSerializer(read_only=True)
+    item_count = serializers.IntegerField(source='items.count', read_only=True)
+    user = serializers.SerializerMethodField()
 
     class Meta:
         model = Order
         fields = [
-            'id', 'order_status', 'subtotal_amount', 'shipping_cost', 'total_amount',
+            'id', 'order_status', 'subtotal_cost', 'shipping_cost', 'total_amount',
             'shipping_full_name', 'shipping_street_address', 'shipping_city',
             'shipping_state', 'shipping_postal_code', 'shipping_country',
-            'items', 'payment', 'created_at', 'updated_at',
+            'items', 'item_count', 'user', 'payment', 'created_at', 'updated_at',
         ]
         read_only_fields = fields
+
+    def get_user(self, obj):
+        if obj.user:
+            return {'email': obj.user.email}
+        return None
 
 
 class CheckoutSerializer(serializers.Serializer):

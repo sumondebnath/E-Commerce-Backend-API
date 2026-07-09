@@ -7,7 +7,7 @@ class CartItemSerializer(serializers.ModelSerializer):
     product_name = serializers.CharField(source='product.name', read_only=True)
     product_price = serializers.DecimalField(source='product.price', max_digits=10, decimal_places=2, read_only=True)
     product_image = serializers.ImageField(source='product.image', read_only=True)
-    stock_available = serializers.IntegerField(source='product.stock_count', read_only=True)
+    stock_available = serializers.SerializerMethodField()
     subtotal = serializers.SerializerMethodField()
 
     class Meta:
@@ -17,6 +17,9 @@ class CartItemSerializer(serializers.ModelSerializer):
 
     def get_subtotal(self, obj):
         return obj.subtotal
+
+    def get_stock_available(self, obj):
+        return obj.product.stock_count > 0
     
     def validate(self, attrs):
         product = attrs.get('product') or getattr(self.instance, 'product', None)

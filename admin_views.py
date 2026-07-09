@@ -1,132 +1,73 @@
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from rest_framework import permissions
-from django.db.models import Sum, Count, Avg
+from rest_framework import permissions, status
+from rest_framework.pagination import PageNumberPagination
+from django.db.models import Sum, Count
 from django.db.models.functions import TruncDate
 from django.utils import timezone
 from datetime import timedelta
 
 from accounts.models import User
 from products.models import Product, Category
-from orders.models import Order, Payment
+from orders.models import Order, OrderItem, Payment
 from cart.models import CartItem
 
 
 class IsAdminUser(permissions.BasePermission):
-    """Only staff/superusers can access admin stats."""
     def has_permission(self, request, view):
         return request.user.is_authenticated and request.user.is_staff
 
 
+# ── Dashboard ──────────────────────────────────────────────────────────────────
+
 class DashboardStatsView(APIView):
-    """
-    GET /api/admin/dashboard/
-    Returns all key metrics for the admin dashboard in one call.
-    """
     permission_classes = [IsAdminUser]
 
     def get(self, request):
-        now = timezone.now()
-        last_30_days = now - timedelta(days=30)
-        last_7_days  = now - timedelta(days=7)
-
-        # ── Orders ────────────────────────────────────────────────────────────
-        total_orders    = Order.objects.count()
-        orders_today    = Order.objects.filter(created_at__date=now.date()).count()
-        orders_30_days  = Order.objects.filter(created_at__gte=last_30_days).count()
-        pending_orders  = Order.objects.filter(order_status='Pending').count()
-        orders_by_status = (
-            Order.objects.values('order_status')
-            .annotate(count=Count('id'))
-            .order_by('order_status')
-        )
-
-        # ── Revenue ───────────────────────────────────────────────────────────
+        total_orders = Order.objects.count()
+        total_users = User.objects.filter(is_staff=False).count()
         total_revenue = (
             Payment.objects.filter(payment_status='Completed')
             .aggregate(total=Sum('amount'))['total'] or 0
         )
-        revenue_30_days = (
-            Payment.objects.filter(payment_status='Completed', paid_at__gte=last_30_days)
-            .aggregate(total=Sum('amount'))['total'] or 0
-        )
-        revenue_7_days = (
-            Payment.objects.filter(payment_status='Completed', paid_at__gte=last_7_days)
-            .aggregate(total=Sum('amount'))['total'] or 0
-        )
-
-        # Revenue per day for last 30 days (for chart)
-        daily_revenue = list(
-            Payment.objects.filter(payment_status='Completed', paid_at__gte=last_30_days)
-            .annotate(date=TruncDate('paid_at'))
-            .values('date')
-            .annotate(revenue=Sum('amount'))
-            .order_by('date')
-        )
-
-        # ── Products ──────────────────────────────────────────────────────────
-        total_products  = Product.objects.count()
-        active_products = Product.objects.filter(is_active=True).count()
-        # Low stock = active products with stock <= 5
-        low_stock = list(
-            Product.objects.filter(is_active=True, stock_count__lte=5)
-            .values('id', 'name', 'stock_count')
-            .order_by('stock_count')[:10]
-        )
-        out_of_stock = Product.objects.filter(is_active=True, stock_count=0).count()
-        top_products = list(
-            Product.objects.annotate(
-                order_count=Count('order_items'),
-                revenue=Sum('order_items__price_at_purchase')
-            )
-            .filter(order_count__gt=0)
-            .values('id', 'name', 'order_count', 'revenue')
-            .order_by('-order_count')[:5]
-        )
-
-        # ── Users ─────────────────────────────────────────────────────────────
-        total_users     = User.objects.filter(is_staff=False).count()
-        new_users_30    = User.objects.filter(is_staff=False, created_at__gte=last_30_days).count()
-        active_carts    = CartItem.objects.values('user').distinct().count()
 
         return Response({
-            'orders': {
-                'total':      total_orders,
-                'today':      orders_today,
-                'last_30_days': orders_30_days,
-                'pending':    pending_orders,
-                'by_status':  list(orders_by_status),
-            },
-            'revenue': {
-                'total':        float(total_revenue),
-                'last_30_days': float(revenue_30_days),
-                'last_7_days':  float(revenue_7_days),
-                'daily_chart':  [
-                    {'date': str(r['date']), 'revenue': float(r['revenue'])}
-                    for r in daily_revenue
-                ],
-            },
-            'products': {
-                'total':        total_products,
-                'active':       active_products,
-                'out_of_stock': out_of_stock,
-                'low_stock':    low_stock,
-                'top_selling':  top_products,
-            },
-            'users': {
-                'total':          total_users,
-                'new_last_30_days': new_users_30,
-                'active_carts':   active_carts,
-            },
+            'orders': {'total': total_orders},
+            'users': {'total': total_users},
+            'revenue': {'total': str(total_revenue)},
         })
 
 
+# ── Admin Orders ───────────────────────────────────────────────────────────────
+
+class AdminOrderPagination(PageNumberPagination):
+    page_size = 20
+
+
+class AdminOrderListView(APIView):
+    permission_classes = [IsAdminUser]
+
+    def get(self, request):
+        orders = Order.objects.select_related('user').prefetch_related('items').all()
+
+        paginator = AdminOrderPagination()
+        page = paginator.paginate_queryset(orders, request)
+
+        results = []
+        for order in page:
+            results.append({
+                'id': str(order.id),
+                'user': {'email': order.user.email if order.user else None},
+                'order_status': order.order_status,
+                'total_amount': str(order.total_amount),
+                'item_count': order.items.count(),
+                'created_at': order.created_at.isoformat(),
+            })
+
+        return paginator.get_paginated_response(results)
+
+
 class OrderManagementView(APIView):
-    """
-    PATCH /api/admin/orders/{order_id}/status/
-    Body: { "status": "Shipped" }
-    Staff-only endpoint to update order status.
-    """
     permission_classes = [IsAdminUser]
 
     def patch(self, request, order_id):
@@ -149,12 +90,106 @@ class OrderManagementView(APIView):
         return Response({'id': str(order.id), 'order_status': order.order_status})
 
 
+# ── Admin Products ─────────────────────────────────────────────────────────────
+
+class AdminProductPagination(PageNumberPagination):
+    page_size = 20
+
+
+class AdminProductListView(APIView):
+    permission_classes = [IsAdminUser]
+
+    def get(self, request):
+        products = Product.objects.select_related('category').all()
+        search = request.query_params.get('search')
+        if search:
+            products = products.filter(name__icontains=search)
+
+        paginator = AdminProductPagination()
+        page = paginator.paginate_queryset(products, request)
+
+        results = []
+        for p in page:
+            results.append({
+                'id': p.id,
+                'name': p.name,
+                'price': str(p.price),
+                'stock_count': p.stock_count,
+                'category_id': p.category_id,
+                'category_name': p.category.name if p.category else None,
+                'description': p.description,
+                'is_active': p.is_active,
+                'created_at': p.created_at.isoformat(),
+            })
+
+        return paginator.get_paginated_response(results)
+
+    def post(self, request):
+        name = request.data.get('name')
+        price = request.data.get('price')
+        stock_count = request.data.get('stock_count', 0)
+        category_id = request.data.get('category_id')
+        description = request.data.get('description', '')
+        is_active = request.data.get('is_active', True)
+
+        if not name or price is None:
+            return Response({'detail': 'name and price are required.'}, status=400)
+
+        product = Product.objects.create(
+            name=name,
+            price=price,
+            stock_count=stock_count,
+            category_id=category_id,
+            description=description,
+            is_active=is_active,
+        )
+
+        return Response({
+            'id': product.id,
+            'name': product.name,
+            'price': str(product.price),
+            'stock_count': product.stock_count,
+            'category_id': product.category_id,
+            'description': product.description,
+            'is_active': product.is_active,
+        }, status=201)
+
+
+class AdminProductDetailView(APIView):
+    permission_classes = [IsAdminUser]
+
+    def patch(self, request, product_id):
+        try:
+            product = Product.objects.get(pk=product_id)
+        except Product.DoesNotExist:
+            return Response({'detail': 'Product not found.'}, status=404)
+
+        for field in ['name', 'price', 'stock_count', 'category_id', 'description', 'is_active']:
+            if field in request.data:
+                setattr(product, field, request.data[field])
+        product.save()
+
+        return Response({
+            'id': product.id,
+            'name': product.name,
+            'price': str(product.price),
+            'stock_count': product.stock_count,
+            'category_id': product.category_id,
+            'description': product.description,
+            'is_active': product.is_active,
+        })
+
+    def delete(self, request, product_id):
+        try:
+            product = Product.objects.get(pk=product_id)
+        except Product.DoesNotExist:
+            return Response({'detail': 'Product not found.'}, status=404)
+
+        product.delete()
+        return Response(status=204)
+
+
 class ProductStockUpdateView(APIView):
-    """
-    PATCH /api/admin/products/{product_id}/stock/
-    Body: { "stock_count": 50 }
-    Quick stock update without going through the full product serializer.
-    """
     permission_classes = [IsAdminUser]
 
     def patch(self, request, product_id):
@@ -170,3 +205,95 @@ class ProductStockUpdateView(APIView):
         product.stock_count = int(stock)
         product.save()
         return Response({'id': product.id, 'name': product.name, 'stock_count': product.stock_count})
+
+
+# ── Admin Categories ───────────────────────────────────────────────────────────
+
+class AdminCategoryPagination(PageNumberPagination):
+    page_size = 20
+
+
+class AdminCategoryListView(APIView):
+    permission_classes = [IsAdminUser]
+
+    def get(self, request):
+        categories = Category.objects.all()
+
+        paginator = AdminCategoryPagination()
+        page = paginator.paginate_queryset(categories, request)
+
+        results = []
+        for cat in page:
+            results.append({
+                'id': cat.id,
+                'name': cat.name,
+                'slug': cat.slug,
+                'description': getattr(cat, 'description', ''),
+            })
+
+        return paginator.get_paginated_response(results)
+
+    def post(self, request):
+        name = request.data.get('name')
+        description = request.data.get('description', '')
+
+        if not name:
+            return Response({'detail': 'name is required.'}, status=400)
+
+        from django.utils.text import slugify
+        slug = slugify(name)
+
+        if Category.objects.filter(slug=slug).exists():
+            return Response({'detail': 'A category with this name already exists.'}, status=400)
+
+        category = Category.objects.create(name=name, slug=slug)
+        return Response({
+            'id': category.id,
+            'name': category.name,
+            'slug': category.slug,
+            'description': description,
+        }, status=201)
+
+
+class AdminCategoryDetailView(APIView):
+    permission_classes = [IsAdminUser]
+
+    def get(self, request, category_id):
+        try:
+            cat = Category.objects.get(pk=category_id)
+        except Category.DoesNotExist:
+            return Response({'detail': 'Category not found.'}, status=404)
+
+        return Response({
+            'id': cat.id,
+            'name': cat.name,
+            'slug': cat.slug,
+            'description': getattr(cat, 'description', ''),
+        })
+
+    def patch(self, request, category_id):
+        try:
+            cat = Category.objects.get(pk=category_id)
+        except Category.DoesNotExist:
+            return Response({'detail': 'Category not found.'}, status=404)
+
+        if 'name' in request.data:
+            cat.name = request.data['name']
+        if 'description' in request.data:
+            pass  # Category model doesn't have description field yet
+        cat.save()
+
+        return Response({
+            'id': cat.id,
+            'name': cat.name,
+            'slug': cat.slug,
+        })
+
+    def delete(self, request, category_id):
+        try:
+            cat = Category.objects.get(pk=category_id)
+        except Category.DoesNotExist:
+            return Response({'detail': 'Category not found.'}, status=404)
+
+        cat.delete()
+        return Response(status=204)
