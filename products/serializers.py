@@ -51,6 +51,7 @@ class ProductListSerializer(serializers.ModelSerializer):
 class ProductDetailSerializer(serializers.ModelSerializer):
     category = CategorySerializer(read_only=True)
     category_id = serializers.PrimaryKeyRelatedField(queryset=Category.objects.all(), source='category', write_only=True, required=False, allow_null=True)
+    image = serializers.ImageField(required=False,allow_null=True, write_only=True)
     reviews = ReviewSerializer(many=True, read_only=True)
     average_rating = serializers.FloatField(read_only=True)
     in_stock = serializers.BooleanField(read_only=True)
@@ -59,8 +60,8 @@ class ProductDetailSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Product
-        fields = ['id', 'name', 'description', 'price', 'stock_count', 'image_url', 'is_active', 'category', 'category_id', 'reviews', 'average_rating', 'in_stock', 'review_count', 'created_at', 'updated_at']
-        read_only_fields = ['id', 'created_at', 'updated_at']
+        fields = ['id', 'name', 'description', 'price', 'stock_count', 'image', 'image_url', 'is_active', 'category', 'category_id', 'reviews', 'average_rating', 'in_stock', 'review_count', 'created_at', 'updated_at']
+        read_only_fields = ['id', 'image_url', 'created_at', 'updated_at']
 
     def get_image_url(self, obj):
         request = self.context.get('request')
