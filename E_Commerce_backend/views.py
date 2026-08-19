@@ -1,5 +1,5 @@
-from django.http import HttpResponse
+from django.http import JsonResponse
 
 
-def Home(request):
-    return HttpResponse("Welcome to the E-Commerce Backend API!")
+def Health_Check(request):
+    return JsonResponse({"status": "ok", "message": "E-Commerce Backend Service is running successfully."})

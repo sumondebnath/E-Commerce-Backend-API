@@ -21,9 +21,12 @@ from django.conf import settings
 from django.conf.urls.static import static
 from admin_config import *  # sets site_header, site_title, index_title
 
+from E_Commerce_backend.views import Health_Check
+
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/admin/', include('admin_urls')),
+    path('api/health/', Health_Check, name='health-check'),
 
     path("api/accounts/", include("accounts.urls")),
     path("api/products/", include("products.urls")),
