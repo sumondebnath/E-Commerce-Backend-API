@@ -37,7 +37,8 @@ ALLOWED_HOSTS = [
 ]
 
 CSRF_TRUSTED_ORIGINS = [
-    "https://e-commerce-backend-api-1slf.onrender.com",
+    # "https://e-commerce-backend-api-1slf.onrender.com",
+    "https://api-ecommerce-46691.containers.snapdeploy.app",
     "https://shop-precom.netlify.app"
 ]
 
