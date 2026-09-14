@@ -33,7 +33,8 @@ DEBUG = env.bool('DEBUG', default=True)
 ALLOWED_HOSTS = [
     "127.0.0.1",
     "localhost",
-    "e-commerce-backend-api-1slf.onrender.com",
+    # "e-commerce-backend-api-1slf.onrender.com",
+    "api-ecommerce-46691.containers.snapdeploy.app"
 ]
 
 CSRF_TRUSTED_ORIGINS = [
