@@ -34,13 +34,14 @@ ALLOWED_HOSTS = [
     "127.0.0.1",
     "localhost",
     # "e-commerce-backend-api-1slf.onrender.com",
-    "api-ecommerce-46691.containers.snapdeploy.app"
+    ".vercel.app",
 ]
 
 CSRF_TRUSTED_ORIGINS = [
     # "https://e-commerce-backend-api-1slf.onrender.com",
-    "https://api-ecommerce-46691.containers.snapdeploy.app",
-    "https://shop-precom.netlify.app"
+    "https://shop-precom.netlify.app",
+    # "https://shop.sumon.xyz",
+    "https://*.vercel.app",
 ]
 
 
@@ -102,6 +103,10 @@ WSGI_APPLICATION = 'E_Commerce_backend.wsgi.application'
 
 # Database
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
+
+DATABASE_URL = os.environ.get("DATABASE_URL")
+if not DATABASE_URL:
+    raise RuntimeError("DATABASE_URL is not set. Check Vercel environment variables.")
 
 DATABASES = {
     "default": dj_database_url.parse(
