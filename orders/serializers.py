@@ -1,3 +1,4 @@
+from decimal import Decimal
 from rest_framework import serializers
 from accounts.models import Address
 from .models import Order, OrderItem, Payment
@@ -69,7 +70,7 @@ class CheckoutSerializer(serializers.Serializer):
     shipping_country = serializers.CharField(required=False)
 
     payment_method = serializers.CharField(required=True)
-    shipping_cost = serializers.DecimalField(max_digits=10, decimal_places=2, required=False, default=0)
+    # shipping_cost = serializers.DecimalField(max_digits=10, decimal_places=2, required=False, default=0)
 
     def validate(self, attrs):
         request = self.context['request']
@@ -90,3 +91,15 @@ class CheckoutSerializer(serializers.Serializer):
                     {"address_id": f"Provide address_id or all of: {', '.join(missing)}"}
                 )
         return attrs
+
+
+
+class PaymentWebhookSerializer(serializers.Serializer):
+    order_id = serializers.UUIDField()
+    transaction_id = serializers.CharField(max_length=255)
+    status = serializers.ChoiceField(
+        choices=[choice[0] for choice in Payment.PAYMENT_STATUS]
+    )
+    amount = serializers.DecimalField(
+        max_digits=10, decimal_places=2, required=False
+    )

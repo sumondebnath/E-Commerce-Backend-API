@@ -14,9 +14,9 @@ class AddressSerializer(serializers.ModelSerializer):
         fields = ["id","address_type", "street_address", "city", "state", "postal_code", "country", "is_default", "created_at"]
         read_only_fields = ["id", "created_at"]
 
-        def create(self, validated_data):
-            validated_data["user"] = self.context["request"].user
-            return super().create(validated_data)
+    def create(self, validated_data):
+        validated_data["user"] = self.context["request"].user
+        return super().create(validated_data)
         
 
 class UserSerializer(serializers.ModelSerializer):
@@ -34,6 +34,15 @@ class UserSerializer(serializers.ModelSerializer):
         if obj.is_staff:
             return ["staff"]
         return ["user"]
+
+    def validate_email(self, value):
+        value = value.strip().lower()
+        qs = User.objects.filter(email__iexact=value)
+        if self.instance is not None:
+            qs = qs.exclude(pk=self.instance.pk)
+        if qs.exists():
+            raise serializers.ValidationError("A user with this email already exists.")
+        return value
 
 
 class RegisterSerializer(serializers.ModelSerializer):
@@ -95,8 +104,10 @@ class MyTokenObtainPairSerializer(TokenObtainPairSerializer):
         return token
 
     def validate(self, attrs):
+        email = attrs.get(self.username_field)
+        if isinstance(email, str):
+            attrs[self.username_field] = email.strip().lower()
         data = super().validate(attrs)
-
         data["user"] = UserSerializer(self.user).data
         return data
     

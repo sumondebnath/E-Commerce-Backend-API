@@ -1,9 +1,12 @@
+from django.db import transaction
 from django.shortcuts import render, get_object_or_404
 from rest_framework import viewsets, permissions, status
 from rest_framework.decorators import action 
 from rest_framework.response import Response
+from rest_framework.exceptions import ValidationError
+from decimal import Decimal
 from products.models import Product
-from .serializers import CartItemSerializer
+from .serializers import CartAddSerializer, CartItemSerializer
 from .models import CartItem
 
 # Create your views here.
@@ -17,24 +20,38 @@ class CartItemViewSet(viewsets.ModelViewSet):
         return CartItem.objects.filter(user=self.request.user).select_related('product')
     
     def create(self, request, *args, **kwargs):
-        product_id = request.data.get('product_id')
-        quantity_to_add = int(request.data.get('quantity', 1))
+        payload = CartAddSerializer(data=request.data)
+        payload.is_valid(raise_exception=True)
 
-        product = get_object_or_404(Product, id=product_id, is_active=True)
+        product_id = payload.validated_data['product_id']
+        quantity_to_add = payload.validated_data['quantity']
 
-        cart_item, created = CartItem.objects.get_or_create(user=request.user, product=product, defaults={'quantity': 0})
-        new_quantity = cart_item.quantity + quantity_to_add
-
-        if new_quantity > product.stock_count:
-            return Response(
-                {
-                    'quantity': f"Only {product.stock_count} unit(s) of '{product.name}' are available in stock."
-                },
-                status=status.HTTP_400_BAD_REQUEST
+        # Keep the lock, the read-modify-write, and the save in one transaction
+        # so two concurrent adds cannot lose an increment.
+        with transaction.atomic():
+            product = get_object_or_404(
+                Product.objects.select_for_update(),
+                id=product_id,
+                is_active=True,
             )
-        
-        cart_item.quantity = new_quantity
-        cart_item.save()
+
+            cart_item, created = CartItem.objects.select_for_update().get_or_create(
+                user=request.user,
+                product=product,
+                defaults={'quantity': 0},
+            )
+            new_quantity = cart_item.quantity + quantity_to_add
+
+            if new_quantity > product.stock_count:
+                raise ValidationError({
+                    'quantity': (
+                        f"Only {product.stock_count} unit(s) of "
+                        f"'{product.name}' are available in stock."
+                    )
+                })
+
+            cart_item.quantity = new_quantity
+            cart_item.save(update_fields=['quantity', 'updated_at'])
 
         serializer = self.get_serializer(cart_item)
         return Response(serializer.data, status=status.HTTP_201_CREATED if created else status.HTTP_200_OK)

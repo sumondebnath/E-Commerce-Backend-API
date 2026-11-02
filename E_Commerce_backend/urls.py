@@ -25,7 +25,8 @@ from E_Commerce_backend.views import Health_Check
 
 urlpatterns = [
     path('admin/', admin.site.urls),
-    path('api/admin/', include('admin_urls')),
+    # path('api/admin/', include('admin_urls')),
+    path('api/admin/', include('custom_admin.urls')),
     path('api/health/', Health_Check, name='health-check'),
 
     path("api/accounts/", include("accounts.urls")),

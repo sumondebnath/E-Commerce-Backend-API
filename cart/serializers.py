@@ -2,6 +2,11 @@ from rest_framework import serializers
 from .models import CartItem
 from products.models import Product
 
+class CartAddSerializer(serializers.Serializer):
+    """Input validation for the custom additive POST /api/cart/ endpoint."""
+    product_id = serializers.IntegerField(min_value=1)
+    quantity = serializers.IntegerField(min_value=1, default=1)
+
 class CartItemSerializer(serializers.ModelSerializer):
     product_id = serializers.PrimaryKeyRelatedField(queryset=Product.objects.filter(is_active=True), source='product', write_only=True)
     product_name = serializers.CharField(source='product.name', read_only=True)
@@ -23,7 +28,8 @@ class CartItemSerializer(serializers.ModelSerializer):
     
     def validate(self, attrs):
         product = attrs.get('product') or getattr(self.instance, 'product', None)
-        quantity = attrs.get('quantity') or getattr(self.instance, 'quantity', 1)
+        # quantity = attrs.get('quantity') or getattr(self.instance, 'quantity', 1)
+        quantity = attrs['quantity'] if 'quantity' in attrs else getattr(self.instance, 'quantity', 1)
 
         if product and quantity > product.stock_count:
             raise serializers.ValidationError(

@@ -7,7 +7,7 @@ class CategorySerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Category
-        fields = ['id', 'name', 'slug', 'products_count']
+        fields = ['id', 'name', 'slug', 'description', 'products_count']
 
 
 class ReviewSerializer(serializers.ModelSerializer):
@@ -32,7 +32,7 @@ class ReviewSerializer(serializers.ModelSerializer):
 
 class ProductListSerializer(serializers.ModelSerializer):
     category_name = serializers.CharField(source='category.name', read_only=True)
-    average_rating = serializers.FloatField(read_only=True)
+    average_rating = serializers.SerializerMethodField()
     in_stock = serializers.BooleanField(read_only=True)
     image_url = serializers.SerializerMethodField()
 
@@ -46,6 +46,14 @@ class ProductListSerializer(serializers.ModelSerializer):
             return request.build_absolute_uri(obj.image.url) if request else obj.image.url
         return None
 
+    def get_average_rating(self, obj):
+        # Works both when the queryset is annotated and when it is not
+        # (e.g. nested inside SaveProductSerializer / watchlist).
+        rating = getattr(obj, 'average_rating', None)
+        if rating is None:
+            rating = obj.computed_average_rating
+        return float(rating or 0)
+
 
 
 class ProductDetailSerializer(serializers.ModelSerializer):
@@ -53,7 +61,7 @@ class ProductDetailSerializer(serializers.ModelSerializer):
     category_id = serializers.PrimaryKeyRelatedField(queryset=Category.objects.all(), source='category', write_only=True, required=False, allow_null=True)
     image = serializers.ImageField(required=False,allow_null=True, write_only=True)
     reviews = ReviewSerializer(many=True, read_only=True)
-    average_rating = serializers.FloatField(read_only=True)
+    average_rating = serializers.SerializerMethodField()
     in_stock = serializers.BooleanField(read_only=True)
     review_count = serializers.IntegerField(source='reviews.count', read_only=True)
     image_url = serializers.SerializerMethodField()
@@ -73,6 +81,12 @@ class ProductDetailSerializer(serializers.ModelSerializer):
         if value < 0:
             raise serializers.ValidationError("Price must be a non-negative value.")
         return value
+    def get_average_rating(self, obj):
+        rating = getattr(obj, 'average_rating', None)
+        if rating is None:
+            rating = obj.computed_average_rating
+        return float(rating or 0)
+
     
 
 class SaveProductSerializer(serializers.ModelSerializer):

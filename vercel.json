@@ -1,8 +1,15 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "functions": {
-    "myproject/wsgi.py": {
-      "maxDuration": 30
+  "builds": [
+    {
+      "src": "E_Commerce_backend/wsgi.py",
+      "use": "@vercel/python"
     }
-  }
+  ],
+  "routes": [
+    {
+      "src": "/(.*)",
+      "dest": "E_Commerce_backend/wsgi.py"
+    }
+  ]
 }

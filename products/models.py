@@ -7,6 +7,7 @@ from django.core.validators import MinValueValidator, MaxValueValidator
 class Category(models.Model):
     name = models.CharField(max_length=100, unique=True)
     slug = models.SlugField(max_length=120, unique=True)
+    description = models.TextField(blank=True, null=True, default="")
 
     class Meta:
         verbose_name_plural = "Categories"
@@ -42,7 +43,7 @@ class Product(models.Model):
     
     @property
     def computed_average_rating(self):
-        return self.reviews.aggregate(avg=models.AVG('rating'))['avg'] or 0.0
+        return self.reviews.aggregate(avg=models.Avg('rating'))['avg'] or 0.0
 
 
 class Review(models.Model):

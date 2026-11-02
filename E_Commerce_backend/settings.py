@@ -45,6 +45,18 @@ CSRF_TRUSTED_ORIGINS = [
 ]
 
 
+# Production security
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+
+if not DEBUG:
+    SECURE_SSL_REDIRECT = True
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+    SECURE_HSTS_SECONDS = 31536000
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+    SECURE_HSTS_PRELOAD = True
+
+
 # Application definition
 
 INSTALLED_APPS = [
@@ -66,6 +78,7 @@ INSTALLED_APPS = [
     "products",
     "orders",
     "cart",
+    "custom_admin",
 
 ]
 
@@ -105,16 +118,37 @@ WSGI_APPLICATION = 'E_Commerce_backend.wsgi.application'
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
 DATABASE_URL = os.environ.get("DATABASE_URL")
-if not DATABASE_URL:
-    raise RuntimeError("DATABASE_URL is not set. Check Vercel environment variables.")
 
-DATABASES = {
-    "default": dj_database_url.parse(
-        os.environ["DATABASE_URL"],
-        conn_max_age=600,
-        ssl_require=True,
-    )
-}
+#--------------------------- X -------------------------------
+if DATABASE_URL:
+    DATABASES = {
+        'default': dj_database_url.parse(
+            DATABASE_URL,
+            conn_max_age=600,
+            ssl_require=not DEBUG,
+        )
+    }
+elif DEBUG:
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'db.sqlite3',
+        }
+    }
+else:
+    raise RuntimeError('DATABASE_URL is required when DEBUG=False.')
+
+# ------------------------------- X ----------------------------------------------------
+# if not DATABASE_URL:
+#     raise RuntimeError("DATABASE_URL is not set. Check Vercel environment variables.")
+
+# DATABASES = {
+#     "default": dj_database_url.parse(
+#         os.environ["DATABASE_URL"],
+#         conn_max_age=600,
+#         ssl_require=True,
+#     )
+# }
 
 
 # local db 
@@ -171,7 +205,7 @@ STATIC_ROOT = BASE_DIR / "staticfiles"
 
 STATICFILES_DIRS = [
     BASE_DIR / "static",
-]
+] if (BASE_DIR / "static").exists() else []
 
 MEDIA_URL = "/media/"
 MEDIA_ROOT = BASE_DIR / "media"
@@ -196,6 +230,15 @@ REST_FRAMEWORK = {
     'DEFAULT_FILTER_BACKENDS': (
         'django_filters.rest_framework.DjangoFilterBackend',
     ),
+    'DEFAULT_THROTTLE_CLASSES': (
+        'rest_framework.throttling.AnonRateThrottle',
+        'rest_framework.throttling.UserRateThrottle',
+    ),
+    'DEFAULT_THROTTLE_RATES': {
+        'anon': '60/min',
+        'user': '1000/day',
+        'auth': '10/min',
+    },
 }
 
 
@@ -210,11 +253,11 @@ STORAGES = {
 
 
 
-if DEBUG:
-    STATICFILES_STORAGE = "django.contrib.staticfiles.storage.StaticFilesStorage"
-else:
-    # STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
-    STATICFILES_STORAGE = "whitenoise.storage.CompressedStaticFilesStorage"
+# if DEBUG:
+#     STATICFILES_STORAGE = "django.contrib.staticfiles.storage.StaticFilesStorage"
+# else:
+#     # STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
+#     STATICFILES_STORAGE = "whitenoise.storage.CompressedStaticFilesStorage"
 
 
 CLOUDINARY_STORAGE = {
@@ -227,17 +270,19 @@ CLOUDINARY_STORAGE = {
 # CORS_ALLOWED_ORIGINS=['https://shop-precom.netlify.app', 'https://api-ecommerce-46691.containers.snapdeploy.app']
 
 
-CORS_ALLOWED_ORIGINS = env.list('CORS_ALLOWED_ORIGINS', default=[
-    'http://localhost:3000',
-    'http://localhost:5173',
-    'http://localhost:5174',
-])
+CORS_ALLOWED_ORIGINS = env.list('CORS_ALLOWED_ORIGINS', default=[])
+if DEBUG:
+    CORS_ALLOWED_ORIGINS = list(dict.fromkeys(CORS_ALLOWED_ORIGINS + [
+        'http://localhost:3000',
+        'http://localhost:5173',
+        'http://localhost:5174',
+    ]))
 CORS_ALLOW_CREDENTIALS = True
 
 
 
 SIMPLE_JWT = {
-    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=15),    # Short-lived for security
+    'ACCESS_TOKEN_LIFETIME': timedelta(days=1),    # Short-lived for security
     'REFRESH_TOKEN_LIFETIME': timedelta(days=7),       # Longer-lived to get new access tokens
     'ROTATE_REFRESH_TOKENS': True,                     # Gives a new refresh token whenever used
     'BLACKLIST_AFTER_ROTATION': True,                  # Prevents old refresh tokens from being reused
@@ -250,6 +295,12 @@ SIMPLE_JWT = {
     'AUTH_TOKEN_CLASSES': ('rest_framework_simplejwt.tokens.AccessToken',),
 }
 
+
+
+# Webhook + shipping settings
+PAYMENT_WEBHOOK_SECRET = env('PAYMENT_WEBHOOK_SECRET', default='')
+FREE_SHIPPING_THRESHOLD = env('FREE_SHIPPING_THRESHOLD', default='100.00')
+FLAT_SHIPPING_COST = env('FLAT_SHIPPING_COST', default='5.00')
 
 
 
