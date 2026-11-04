@@ -19,7 +19,8 @@ from django.contrib import admin
 from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
-from admin_config import *  # sets site_header, site_title, index_title
+# from admin_config import *  # sets site_header, site_title, index_title
+from custom_admin.config import *  # sets site_header, site_title, index_title
 
 from E_Commerce_backend.views import Health_Check
 

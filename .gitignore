@@ -55,3 +55,10 @@ Thumbs.db
 
 *.http
 api.http
+
+
+
+# admin files
+admin_config.py
+admin_urls.py
+admin_views.py
