@@ -121,12 +121,24 @@ DATABASE_URL = os.environ.get("DATABASE_URL")
 
 #--------------------------- X -------------------------------
 if DATABASE_URL:
+    # DATABASES = {
+    #     'default': dj_database_url.parse(
+    #         DATABASE_URL,
+    #         conn_max_age=600,
+    #         ssl_require=not DEBUG,
+    #     )
+    # }
+
+    db_config = dj_database_url.parse(
+        DATABASE_URL,
+        conn_max_age=600,
+        ssl_require=not DEBUG,
+    )
+    # Inject the search path option for the private migration schema
+    db_config.setdefault('OPTIONS', {})['options'] = '-c search_path=private,public'
+    
     DATABASES = {
-        'default': dj_database_url.parse(
-            DATABASE_URL,
-            conn_max_age=600,
-            ssl_require=not DEBUG,
-        )
+        'default': db_config
     }
 elif DEBUG:
     DATABASES = {
